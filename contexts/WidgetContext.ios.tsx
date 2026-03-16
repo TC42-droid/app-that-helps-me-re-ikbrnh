@@ -1,5 +1,6 @@
 import * as React from "react";
 import { createContext, useCallback, useContext } from "react";
+import { ExtensionStorage } from "@bacons/apple-targets";
 
 type WidgetContextType = {
   refreshWidget: () => void;
@@ -8,8 +9,20 @@ type WidgetContextType = {
 const WidgetContext = createContext<WidgetContextType | null>(null);
 
 export function WidgetProvider({ children }: { children: React.ReactNode }) {
+  React.useEffect(() => {
+    try {
+      ExtensionStorage.reloadWidget();
+    } catch {
+      // Not available in Expo Go
+    }
+  }, []);
+
   const refreshWidget = useCallback(() => {
-    // No-op on web/Android
+    try {
+      ExtensionStorage.reloadWidget();
+    } catch {
+      // Not available in Expo Go
+    }
   }, []);
 
   return (
