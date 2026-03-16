@@ -45,7 +45,10 @@ export async function setupDailyReminder(): Promise<void> {
     return;
   }
 
-  await Notifications.cancelAllScheduledNotificationsAsync();
+  const existingId = await AsyncStorage.getItem(MORNING_REMINDER_ID_KEY);
+  if (existingId) {
+    await Notifications.cancelScheduledNotificationAsync(existingId);
+  }
 
   const id = await Notifications.scheduleNotificationAsync({
     content: {
@@ -71,6 +74,8 @@ export async function cancelMorningReminder(): Promise<void> {
   const id = await AsyncStorage.getItem(MORNING_REMINDER_ID_KEY);
   if (id) {
     await Notifications.cancelScheduledNotificationAsync(id);
+    await AsyncStorage.removeItem(MORNING_REMINDER_ID_KEY);
+    await AsyncStorage.removeItem(NOTIFICATIONS_SETUP_KEY);
     console.log('[Notifications] Morning reminder cancelled:', id);
   }
 }

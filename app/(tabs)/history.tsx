@@ -4,6 +4,7 @@ import {
   Text,
   SectionList,
   useColorScheme,
+  Platform,
 } from 'react-native';
 import { Stack, useRouter, useFocusEffect } from 'expo-router';
 import { Calendar } from 'lucide-react-native';
@@ -204,6 +205,30 @@ export default function HistoryScreen() {
           headerBackButtonDisplayMode: 'minimal',
         }}
       />
+      {Platform.OS !== 'ios' && (
+        <View
+          style={{
+            backgroundColor: C.background,
+            paddingHorizontal: 16,
+            paddingTop: 16,
+            paddingBottom: 12,
+            borderBottomWidth: 1,
+            borderBottomColor: C.border,
+          }}
+        >
+          <Text
+            style={{
+              fontSize: 28,
+              fontWeight: '700',
+              color: C.text,
+              fontFamily: 'SpaceGrotesk-Bold',
+              letterSpacing: -0.5,
+            }}
+          >
+            History
+          </Text>
+        </View>
+      )}
       <SectionList
         contentInsetAdjustmentBehavior="automatic"
         style={{ flex: 1, backgroundColor: C.background }}

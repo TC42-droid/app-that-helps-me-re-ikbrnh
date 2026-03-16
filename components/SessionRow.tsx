@@ -89,7 +89,7 @@ export function SessionRow({ session, index, onPress, C }: SessionRowProps) {
                 fontFamily: 'SpaceGrotesk-Bold',
               }}
             >
-              {dateDisplay.split(' ')[1]}
+              {new Date(session.start_time).getDate().toString()}
             </Text>
           </View>
 

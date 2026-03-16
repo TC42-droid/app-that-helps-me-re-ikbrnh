@@ -78,16 +78,16 @@ export default function TodayScreen() {
   }, []);
 
   useEffect(() => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
     if (activeSession) {
       intervalRef.current = setInterval(() => {
         const startMs = new Date(activeSession.start_time).getTime();
         setElapsedSeconds(Math.floor((Date.now() - startMs) / 1000));
       }, 1000);
     } else {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
       setElapsedSeconds(0);
     }
     return () => {

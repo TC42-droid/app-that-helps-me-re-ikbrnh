@@ -89,7 +89,7 @@ export const NicknameCircle = ({
         },
       ]}
     >
-      {isEllipsis ? "..." : nickname[0].toUpperCase()}
+      {isEllipsis ? "..." : (nickname?.[0] ?? '?').toUpperCase()}
     </Text>
   );
 };
