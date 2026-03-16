@@ -4,7 +4,6 @@ import { Platform } from 'react-native';
 import { haversineDistance, getWorkLocation } from '@/utils/workLocation';
 import { sendGeofenceClockOutNotification } from '@/utils/notifications';
 import { clockOut, getTodaySessions, computeDurationMinutes } from '@/utils/db';
-import { sendClockOutNotification } from '@/utils/notifications';
 
 interface UseGeofenceOptions {
   activeSessionId: string | null;
@@ -80,7 +79,6 @@ export function useGeofence({ activeSessionId, onAutoClockOut }: UseGeofenceOpti
           );
 
           sendGeofenceClockOutNotification().catch(console.error);
-          sendClockOutNotification(totalMinutes).catch(console.error);
 
           stopWatching();
           onAutoClockOut();

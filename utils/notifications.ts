@@ -75,7 +75,6 @@ export async function cancelMorningReminder(): Promise<void> {
   if (id) {
     await Notifications.cancelScheduledNotificationAsync(id);
     await AsyncStorage.removeItem(MORNING_REMINDER_ID_KEY);
-    await AsyncStorage.removeItem(NOTIFICATIONS_SETUP_KEY);
     console.log('[Notifications] Morning reminder cancelled:', id);
   }
 }

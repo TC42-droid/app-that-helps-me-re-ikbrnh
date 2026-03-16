@@ -351,7 +351,6 @@ export default function SessionDetailScreen() {
               setNotesChanged(true);
               console.log('[SessionDetail] Notes changed, length:', text.length);
             }}
-            onBlur={handleSaveNotes}
             placeholder="Add notes about this session..."
             placeholderTextColor={C.textTertiary}
             multiline

@@ -89,7 +89,7 @@ export function SessionRow({ session, index, onPress, C }: SessionRowProps) {
                 fontFamily: 'SpaceGrotesk-Bold',
               }}
             >
-              {new Date(session.start_time).getDate().toString()}
+              {new Date(session.date + 'T00:00:00').getDate().toString()}
             </Text>
           </View>
 

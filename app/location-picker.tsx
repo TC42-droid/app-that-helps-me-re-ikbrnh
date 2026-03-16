@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { Stack, router } from 'expo-router';
 import { useColorScheme } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 import { WebView } from 'react-native-webview';
 import { MapPin, Navigation, CheckCircle, Minus, Plus } from 'lucide-react-native';
@@ -213,7 +214,12 @@ export default function LocationPickerScreen() {
     })
   ).current;
 
-  const mapHtml = buildMapHtml(pinLat, pinLng, colorScheme === 'dark');
+  const insets = useSafeAreaInsets();
+  const mapHtml = useMemo(
+    () => buildMapHtml(pinLat, pinLng, colorScheme === 'dark'),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [colorScheme]
+  );
   const mapHeight = Math.round(height * 0.52);
   const radiusDisplay = radius >= 1000 ? `${(radius / 1000).toFixed(1)}km` : `${radius}m`;
   const sliderFill = (radius - MIN_RADIUS) / (MAX_RADIUS - MIN_RADIUS);
@@ -258,7 +264,7 @@ export default function LocationPickerScreen() {
         </View>
 
         {/* Bottom panel */}
-        <View style={[styles.panel, { backgroundColor: C.surface, borderColor: C.border }]}>
+        <View style={[styles.panel, { backgroundColor: C.surface, borderColor: C.border, paddingBottom: Math.max(24, insets.bottom + 8) }]}>
           {/* Address label */}
           <View style={styles.addressRow}>
             <MapPin size={18} color={C.primary} />
@@ -481,7 +487,6 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 20,
     paddingTop: 20,
-    paddingBottom: 24,
     borderTopWidth: 1,
     gap: 20,
   },

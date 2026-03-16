@@ -45,12 +45,13 @@ export function initDB(): void {
 export function clockIn(): string {
   const database = getDB();
   const id = generateId();
-  const now = new Date().toISOString();
-  const date = now.split('T')[0];
-  console.log('[DB] Clocking in — id:', id, 'at:', now);
+  const now = new Date();
+  const startTime = now.toISOString();
+  const date = now.toLocaleDateString('en-CA'); // returns YYYY-MM-DD in local time
+  console.log('[DB] Clocking in — id:', id, 'at:', startTime);
   database.runSync(
     'INSERT INTO work_sessions (id, date, start_time, end_time, notes, created_at) VALUES (?, ?, ?, NULL, ?, ?)',
-    [id, date, now, '', now]
+    [id, date, startTime, '', startTime]
   );
   console.log('[DB] Clock in recorded successfully');
   return id;

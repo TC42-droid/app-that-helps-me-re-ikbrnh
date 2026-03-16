@@ -95,7 +95,7 @@ export default function FloatingTabBar({
   }, [activeTabIndex, animatedValue]);
 
   const handleTabPress = (route: Href) => {
-    router.push(route);
+    router.navigate(route);
   };
 
   // Remove unnecessary tabBarStyle animation to prevent flickering
