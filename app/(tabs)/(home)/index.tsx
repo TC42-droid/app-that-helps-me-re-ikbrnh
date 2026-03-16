@@ -5,11 +5,25 @@ import {
   ScrollView,
   Alert,
   Platform,
+  TextInput,
+  ActivityIndicator,
 } from 'react-native';
 import { useFocusEffect, router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useColorScheme } from 'react-native';
-import { Bluetooth, Check, Clock, Briefcase, MapPin, ChevronRight, Navigation } from 'lucide-react-native';
+import {
+  Bluetooth,
+  BluetoothOff,
+  Check,
+  Clock,
+  Briefcase,
+  MapPin,
+  ChevronRight,
+  Navigation,
+  RefreshCw,
+  X,
+  Car,
+} from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { COLORS, DARK_COLORS } from '@/styles/colors';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
@@ -30,9 +44,12 @@ import {
 } from '@/utils/notifications';
 import { getWorkLocation, WorkLocation } from '@/utils/workLocation';
 import { useGeofence } from '@/hooks/useGeofence';
-
-const BT_DEVICE_KEY = 'selected_bt_device';
-const MOCK_BT_DEVICES = ['My Car', 'BMW 320i', 'Tesla Model 3', 'Honda Civic BT'];
+import {
+  useBluetoothAutoClockOut,
+  CAR_BT_DEVICE_KEY,
+  getPairedDeviceNames,
+  isBluetoothAvailable,
+} from '@/hooks/useBluetoothAutoClockOut';
 
 export default function TodayScreen() {
   const colorScheme = useColorScheme();
@@ -41,7 +58,10 @@ export default function TodayScreen() {
   const [activeSession, setActiveSession] = useState<WorkSession | null>(null);
   const [todaySessions, setTodaySessions] = useState<WorkSession[]>([]);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const [selectedBtDevice, setSelectedBtDevice] = useState<string | null>(null);
+  const [carBtDevice, setCarBtDevice] = useState<string | null>(null);
+  const [btManualInput, setBtManualInput] = useState('');
+  const [pairedDevices, setPairedDevices] = useState<string[]>([]);
+  const [isLoadingPaired, setIsLoadingPaired] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [workLocation, setWorkLocation] = useState<WorkLocation | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -54,8 +74,7 @@ export default function TodayScreen() {
     setTodaySessions(today);
     if (active) {
       const startMs = new Date(active.start_time).getTime();
-      const nowMs = Date.now();
-      setElapsedSeconds(Math.floor((nowMs - startMs) / 1000));
+      setElapsedSeconds(Math.floor((Date.now() - startMs) / 1000));
     } else {
       setElapsedSeconds(0);
     }
@@ -76,12 +95,13 @@ export default function TodayScreen() {
   );
 
   useEffect(() => {
-    const loadBtDevice = async () => {
-      const saved = await AsyncStorage.getItem(BT_DEVICE_KEY);
-      setSelectedBtDevice(saved);
-      console.log('[Today] Loaded BT device from storage:', saved);
+    const init = async () => {
+      const saved = await AsyncStorage.getItem(CAR_BT_DEVICE_KEY);
+      setCarBtDevice(saved);
+      setBtManualInput(saved ?? '');
+      console.log('[Today] Loaded car BT device from storage:', saved);
     };
-    loadBtDevice();
+    init();
     setupDailyReminder().catch(console.error);
   }, []);
 
@@ -108,11 +128,17 @@ export default function TodayScreen() {
 
   // Geofence: auto clock-out when leaving work location
   const handleAutoClockOut = useCallback(() => {
-    console.log('[Today] Geofence triggered auto clock-out');
+    console.log('[Today] Auto clock-out triggered (geofence or Bluetooth)');
     loadData();
   }, [loadData]);
 
   useGeofence({
+    activeSessionId: activeSession?.id ?? null,
+    onAutoClockOut: handleAutoClockOut,
+  });
+
+  // Bluetooth: auto clock-out when car device connects
+  useBluetoothAutoClockOut({
     activeSessionId: activeSession?.id ?? null,
     onAutoClockOut: handleAutoClockOut,
   });
@@ -162,19 +188,46 @@ export default function TodayScreen() {
     }
   };
 
-  const handleSelectBtDevice = async (device: string) => {
-    console.log('[Today] User selected BT device:', device);
+  const handleSaveCarDevice = async (name: string) => {
+    const trimmed = name.trim();
+    console.log('[Today] User saving car BT device:', trimmed);
     if (Platform.OS === 'ios') {
       await Haptics.selectionAsync();
     }
-    if (selectedBtDevice === device) {
-      await AsyncStorage.removeItem(BT_DEVICE_KEY);
-      setSelectedBtDevice(null);
-      console.log('[Today] BT device deselected');
+    if (!trimmed) {
+      await AsyncStorage.removeItem(CAR_BT_DEVICE_KEY);
+      setCarBtDevice(null);
+      setBtManualInput('');
+      console.log('[Today] Car BT device cleared');
     } else {
-      await AsyncStorage.setItem(BT_DEVICE_KEY, device);
-      setSelectedBtDevice(device);
-      console.log('[Today] BT device saved:', device);
+      await AsyncStorage.setItem(CAR_BT_DEVICE_KEY, trimmed);
+      setCarBtDevice(trimmed);
+      setBtManualInput(trimmed);
+      console.log('[Today] Car BT device saved:', trimmed);
+    }
+  };
+
+  const handleClearCarDevice = async () => {
+    console.log('[Today] User cleared car BT device');
+    if (Platform.OS === 'ios') {
+      await Haptics.selectionAsync();
+    }
+    await AsyncStorage.removeItem(CAR_BT_DEVICE_KEY);
+    setCarBtDevice(null);
+    setBtManualInput('');
+  };
+
+  const handleRefreshPaired = async () => {
+    console.log('[Today] User pressed refresh paired devices');
+    setIsLoadingPaired(true);
+    try {
+      const names = await getPairedDeviceNames();
+      setPairedDevices(names);
+      console.log('[Today] Paired devices refreshed:', names.length, 'found');
+    } catch (err) {
+      console.error('[Today] Error fetching paired devices:', err);
+    } finally {
+      setIsLoadingPaired(false);
     }
   };
 
@@ -194,6 +247,16 @@ export default function TodayScreen() {
   const buttonBg = isClocked ? C.danger : C.primary;
   const workLocationLabel = workLocation?.label ?? 'Not set';
   const workLocationRadius = workLocation ? `${workLocation.radius}m radius` : '';
+
+  const btInputBorderColor = btManualInput.trim() && btManualInput.trim() === carBtDevice
+    ? C.primary
+    : C.border;
+  const btInputBg = btManualInput.trim() && btManualInput.trim() === carBtDevice
+    ? C.primaryMuted
+    : C.surfaceSecondary;
+
+  const sessionLabel = sessionCountDisplay === 1 ? 'Session' : 'Sessions';
+  const totalHoursDisplay = todayTotalMinutes > 0 ? todayTotalDisplay : '0m';
 
   return (
     <ScrollView
@@ -284,7 +347,7 @@ export default function TodayScreen() {
                 letterSpacing: -0.5,
               }}
             >
-              {todayTotalMinutes > 0 ? todayTotalDisplay : '0m'}
+              {totalHoursDisplay}
             </Text>
             <Text
               style={{
@@ -325,7 +388,7 @@ export default function TodayScreen() {
                 fontFamily: 'SpaceGrotesk-Regular',
               }}
             >
-              {sessionCountDisplay === 1 ? 'Session' : 'Sessions'}
+              {sessionLabel}
             </Text>
           </View>
         </View>
@@ -381,10 +444,7 @@ export default function TodayScreen() {
               gap: 10,
             }}
           >
-            <MapPin
-              size={18}
-              color={workLocation ? C.primary : C.textSecondary}
-            />
+            <MapPin size={18} color={workLocation ? C.primary : C.textSecondary} />
             <View style={{ flex: 1 }}>
               <Text
                 style={{
@@ -401,7 +461,7 @@ export default function TodayScreen() {
                 <Text
                   style={{
                     fontSize: 12,
-                    color: workLocation ? C.primary : C.textSecondary,
+                    color: C.primary,
                     marginTop: 1,
                     fontFamily: 'SpaceGrotesk-Regular',
                     opacity: 0.75,
@@ -416,7 +476,7 @@ export default function TodayScreen() {
         </AnimatedPressable>
       </View>
 
-      {/* Bluetooth Device Picker */}
+      {/* Car Bluetooth Auto Clock-Out Card */}
       <View
         style={{
           backgroundColor: C.surface,
@@ -427,8 +487,9 @@ export default function TodayScreen() {
           boxShadow: '0 1px 3px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.04)',
         }}
       >
+        {/* Header */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-          <Bluetooth size={18} color={C.primary} />
+          <Car size={18} color={C.primary} />
           <Text
             style={{
               fontSize: 15,
@@ -437,7 +498,7 @@ export default function TodayScreen() {
               fontFamily: 'SpaceGrotesk-SemiBold',
             }}
           >
-            Auto Clock-Out Device
+            Car Bluetooth Auto Clock-Out
           </Text>
         </View>
         <Text
@@ -449,63 +510,276 @@ export default function TodayScreen() {
             fontFamily: 'SpaceGrotesk-Regular',
           }}
         >
-          When this device connects, you'll be clocked out automatically.
+          When your phone connects to your car's Bluetooth while clocked in, you'll be clocked out automatically.
         </Text>
 
-        <View style={{ gap: 8 }}>
-          {MOCK_BT_DEVICES.map((device) => {
-            const isSelected = selectedBtDevice === device;
-            return (
-              <AnimatedPressable
-                key={device}
-                onPress={() => handleSelectBtDevice(device)}
+        {/* Active device badge */}
+        {carBtDevice ? (
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: C.primaryMuted,
+              borderRadius: 10,
+              paddingVertical: 10,
+              paddingHorizontal: 14,
+              marginBottom: 16,
+              gap: 8,
+              borderWidth: 1,
+              borderColor: C.primary,
+            }}
+          >
+            <Bluetooth size={15} color={C.primary} />
+            <Text
+              style={{
+                flex: 1,
+                fontSize: 14,
+                fontWeight: '600',
+                color: C.primary,
+                fontFamily: 'SpaceGrotesk-SemiBold',
+              }}
+              numberOfLines={1}
+            >
+              {carBtDevice}
+            </Text>
+            <AnimatedPressable onPress={handleClearCarDevice}>
+              <View
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 14,
+                  backgroundColor: C.primary,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
               >
+                <X size={14} color="#FFFFFF" />
+              </View>
+            </AnimatedPressable>
+          </View>
+        ) : null}
+
+        {/* Manual name input */}
+        <Text
+          style={{
+            fontSize: 12,
+            fontWeight: '600',
+            color: C.textSecondary,
+            fontFamily: 'SpaceGrotesk-SemiBold',
+            marginBottom: 6,
+            letterSpacing: 0.3,
+            textTransform: 'uppercase',
+          }}
+        >
+          Device name
+        </Text>
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: btInputBg,
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: btInputBorderColor,
+            paddingHorizontal: 14,
+            marginBottom: 12,
+            gap: 8,
+          }}
+        >
+          <Bluetooth size={16} color={C.textSecondary} />
+          <TextInput
+            value={btManualInput}
+            onChangeText={(text) => {
+              setBtManualInput(text);
+            }}
+            placeholder="e.g. My Car, BMW 320i"
+            placeholderTextColor={C.textTertiary}
+            style={{
+              flex: 1,
+              fontSize: 15,
+              color: C.text,
+              fontFamily: 'SpaceGrotesk-Regular',
+              paddingVertical: 13,
+            }}
+            returnKeyType="done"
+            onSubmitEditing={() => {
+              console.log('[Today] BT device name submitted via keyboard:', btManualInput);
+              handleSaveCarDevice(btManualInput);
+            }}
+            autoCapitalize="words"
+            autoCorrect={false}
+          />
+          {btManualInput.trim().length > 0 && btManualInput.trim() !== carBtDevice ? (
+            <AnimatedPressable
+              onPress={() => {
+                console.log('[Today] User pressed Save device name button');
+                handleSaveCarDevice(btManualInput);
+              }}
+            >
+              <View
+                style={{
+                  backgroundColor: C.primary,
+                  borderRadius: 8,
+                  paddingHorizontal: 12,
+                  paddingVertical: 6,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 13,
+                    fontWeight: '600',
+                    color: '#FFFFFF',
+                    fontFamily: 'SpaceGrotesk-SemiBold',
+                  }}
+                >
+                  Save
+                </Text>
+              </View>
+            </AnimatedPressable>
+          ) : null}
+          {btManualInput.trim() === carBtDevice && carBtDevice ? (
+            <Check size={16} color={C.primary} />
+          ) : null}
+        </View>
+
+        {/* Paired devices list (Android only) */}
+        {isBluetoothAvailable ? (
+          <View>
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: 8,
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 12,
+                  fontWeight: '600',
+                  color: C.textSecondary,
+                  fontFamily: 'SpaceGrotesk-SemiBold',
+                  letterSpacing: 0.3,
+                  textTransform: 'uppercase',
+                }}
+              >
+                Paired devices
+              </Text>
+              <AnimatedPressable onPress={handleRefreshPaired}>
                 <View
                   style={{
                     flexDirection: 'row',
                     alignItems: 'center',
-                    paddingVertical: 12,
-                    paddingHorizontal: 14,
-                    borderRadius: 12,
-                    backgroundColor: isSelected ? C.primaryMuted : C.surfaceSecondary,
-                    borderWidth: 1,
-                    borderColor: isSelected ? C.primary : 'transparent',
+                    gap: 4,
+                    paddingVertical: 4,
+                    paddingHorizontal: 8,
+                    borderRadius: 8,
+                    backgroundColor: C.surfaceSecondary,
                   }}
                 >
-                  <Bluetooth
-                    size={16}
-                    color={isSelected ? C.primary : C.textSecondary}
-                  />
+                  {isLoadingPaired ? (
+                    <ActivityIndicator size="small" color={C.primary} />
+                  ) : (
+                    <RefreshCw size={13} color={C.primary} />
+                  )}
                   <Text
                     style={{
-                      flex: 1,
-                      fontSize: 15,
-                      color: isSelected ? C.primary : C.text,
-                      marginLeft: 10,
-                      fontWeight: isSelected ? '600' : '400',
-                      fontFamily: isSelected ? 'SpaceGrotesk-SemiBold' : 'SpaceGrotesk-Regular',
+                      fontSize: 12,
+                      color: C.primary,
+                      fontFamily: 'SpaceGrotesk-SemiBold',
                     }}
                   >
-                    {device}
+                    Refresh
                   </Text>
-                  {isSelected && <Check size={16} color={C.primary} />}
                 </View>
               </AnimatedPressable>
-            );
-          })}
-        </View>
+            </View>
 
-        <Text
-          style={{
-            fontSize: 12,
-            color: C.textTertiary,
-            marginTop: 12,
-            lineHeight: 16,
-            fontFamily: 'SpaceGrotesk-Regular',
-          }}
-        >
-          Note: Actual Bluetooth detection requires a custom build. This configures the device for when that feature is enabled.
-        </Text>
+            {pairedDevices.length === 0 ? (
+              <View
+                style={{
+                  alignItems: 'center',
+                  paddingVertical: 16,
+                  gap: 6,
+                }}
+              >
+                <BluetoothOff size={22} color={C.textTertiary} />
+                <Text
+                  style={{
+                    fontSize: 13,
+                    color: C.textTertiary,
+                    fontFamily: 'SpaceGrotesk-Regular',
+                    textAlign: 'center',
+                  }}
+                >
+                  Tap Refresh to load paired devices
+                </Text>
+              </View>
+            ) : (
+              <View style={{ gap: 6 }}>
+                {pairedDevices.map((device) => {
+                  const isSelected = carBtDevice === device;
+                  return (
+                    <AnimatedPressable
+                      key={device}
+                      onPress={() => {
+                        console.log('[Today] User tapped paired device:', device);
+                        handleSaveCarDevice(device);
+                      }}
+                    >
+                      <View
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          paddingVertical: 11,
+                          paddingHorizontal: 14,
+                          borderRadius: 12,
+                          backgroundColor: isSelected ? C.primaryMuted : C.surfaceSecondary,
+                          borderWidth: 1,
+                          borderColor: isSelected ? C.primary : 'transparent',
+                          gap: 10,
+                        }}
+                      >
+                        <Bluetooth
+                          size={15}
+                          color={isSelected ? C.primary : C.textSecondary}
+                        />
+                        <Text
+                          style={{
+                            flex: 1,
+                            fontSize: 14,
+                            color: isSelected ? C.primary : C.text,
+                            fontWeight: isSelected ? '600' : '400',
+                            fontFamily: isSelected ? 'SpaceGrotesk-SemiBold' : 'SpaceGrotesk-Regular',
+                          }}
+                          numberOfLines={1}
+                        >
+                          {device}
+                        </Text>
+                        {isSelected ? (
+                          <Check size={15} color={C.primary} />
+                        ) : null}
+                      </View>
+                    </AnimatedPressable>
+                  );
+                })}
+              </View>
+            )}
+          </View>
+        ) : (
+          <Text
+            style={{
+              fontSize: 12,
+              color: C.textTertiary,
+              lineHeight: 17,
+              fontFamily: 'SpaceGrotesk-Regular',
+            }}
+          >
+            {Platform.OS === 'android'
+              ? 'Bluetooth scanning requires a development build. Enter your car device name manually above.'
+              : 'Automatic Bluetooth detection is not available on this platform. Enter your car device name manually above — it will be used when running on Android.'}
+          </Text>
+        )}
       </View>
     </ScrollView>
   );
