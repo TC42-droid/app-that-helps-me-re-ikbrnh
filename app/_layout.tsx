@@ -89,6 +89,10 @@ export default function RootLayout() {
                   name="session/[id]"
                   options={{ headerShown: true, headerBackButtonDisplayMode: "minimal" }}
                 />
+                <Stack.Screen
+                  name="location-picker"
+                  options={{ headerShown: true, title: "Set Work Location", headerBackButtonDisplayMode: "minimal" }}
+                />
               </Stack>
               <SystemBars style={"auto"} />
             </GestureHandlerRootView>

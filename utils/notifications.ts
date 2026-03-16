@@ -104,3 +104,21 @@ export async function sendClockOutNotification(totalMinutes: number): Promise<vo
   });
   console.log('[Notifications] Clock-out notification sent');
 }
+
+export async function sendGeofenceClockOutNotification(): Promise<void> {
+  console.log('[Notifications] Sending geofence auto clock-out notification');
+  if (Platform.OS === 'web') return;
+
+  const granted = await requestNotificationPermissions();
+  if (!granted) return;
+
+  await Notifications.scheduleNotificationAsync({
+    content: {
+      title: 'Auto Clocked Out',
+      body: "You've left your work location — clocked out automatically.",
+      sound: true,
+    },
+    trigger: null,
+  });
+  console.log('[Notifications] Geofence clock-out notification sent');
+}

@@ -4,12 +4,11 @@ import {
   Text,
   ScrollView,
   Alert,
-  Platform,
 } from 'react-native';
-import { Stack, useFocusEffect } from 'expo-router';
+import { Stack, useFocusEffect, router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useColorScheme } from 'react-native';
-import { Bluetooth, Check, Clock, Briefcase } from 'lucide-react-native';
+import { Bluetooth, Check, Clock, Briefcase, MapPin, ChevronRight, Navigation } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { COLORS, DARK_COLORS } from '@/styles/colors';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
@@ -28,9 +27,10 @@ import {
   cancelMorningReminder,
   sendClockOutNotification,
 } from '@/utils/notifications';
+import { getWorkLocation, WorkLocation } from '@/utils/workLocation';
+import { useGeofence } from '@/hooks/useGeofence';
 
 const BT_DEVICE_KEY = 'selected_bt_device';
-
 const MOCK_BT_DEVICES = ['My Car', 'BMW 320i', 'Tesla Model 3', 'Honda Civic BT'];
 
 export default function TodayScreen() {
@@ -42,6 +42,7 @@ export default function TodayScreen() {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [selectedBtDevice, setSelectedBtDevice] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [workLocation, setWorkLocation] = useState<WorkLocation | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const loadData = useCallback(() => {
@@ -60,10 +61,17 @@ export default function TodayScreen() {
     console.log('[Today] Active session:', active?.id ?? 'none', '| Today sessions:', today.length);
   }, []);
 
+  const loadWorkLocation = useCallback(async () => {
+    const loc = await getWorkLocation();
+    console.log('[Today] Work location loaded:', loc?.label ?? 'none');
+    setWorkLocation(loc);
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
       loadData();
-    }, [loadData])
+      loadWorkLocation();
+    }, [loadData, loadWorkLocation])
   );
 
   useEffect(() => {
@@ -97,6 +105,17 @@ export default function TodayScreen() {
     };
   }, [activeSession]);
 
+  // Geofence: auto clock-out when leaving work location
+  const handleAutoClockOut = useCallback(() => {
+    console.log('[Today] Geofence triggered auto clock-out');
+    loadData();
+  }, [loadData]);
+
+  useGeofence({
+    activeSessionId: activeSession?.id ?? null,
+    onAutoClockOut: handleAutoClockOut,
+  });
+
   const handleClockIn = async () => {
     console.log('[Today] User pressed Clock In button');
     if (isLoading) return;
@@ -123,7 +142,6 @@ export default function TodayScreen() {
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       clockOut(activeSession.id);
       console.log('[Today] Clocked out session:', activeSession.id);
-
       const todayAll = getTodaySessions();
       const totalMinutes = todayAll.reduce((sum, s) => {
         return sum + computeDurationMinutes(s.start_time, s.end_time);
@@ -153,6 +171,11 @@ export default function TodayScreen() {
     }
   };
 
+  const handleOpenLocationPicker = () => {
+    console.log('[Today] User pressed Work Location button — navigating to location-picker');
+    router.push('/location-picker');
+  };
+
   const todayTotalMinutes = todaySessions.reduce((sum, s) => {
     return sum + computeDurationMinutes(s.start_time, s.end_time);
   }, 0);
@@ -162,6 +185,8 @@ export default function TodayScreen() {
   const isClocked = !!activeSession;
   const buttonLabel = isClocked ? 'Clock Out' : 'Clock In';
   const buttonBg = isClocked ? C.danger : C.primary;
+  const workLocationLabel = workLocation?.label ?? 'Not set';
+  const workLocationRadius = workLocation ? `${workLocation.radius}m radius` : '';
 
   return (
     <>
@@ -299,6 +324,91 @@ export default function TodayScreen() {
               </Text>
             </View>
           </View>
+        </View>
+
+        {/* Work Location Card */}
+        <View
+          style={{
+            backgroundColor: C.surface,
+            borderRadius: 16,
+            padding: 20,
+            borderWidth: 1,
+            borderColor: C.border,
+            boxShadow: '0 1px 3px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.04)',
+          }}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+            <Navigation size={18} color={C.primary} />
+            <Text
+              style={{
+                fontSize: 15,
+                fontWeight: '600',
+                color: C.text,
+                fontFamily: 'SpaceGrotesk-SemiBold',
+              }}
+            >
+              Work Location
+            </Text>
+          </View>
+          <Text
+            style={{
+              fontSize: 13,
+              color: C.textSecondary,
+              marginBottom: 16,
+              lineHeight: 18,
+              fontFamily: 'SpaceGrotesk-Regular',
+            }}
+          >
+            When you leave this location while clocked in, you'll be clocked out automatically.
+          </Text>
+
+          <AnimatedPressable onPress={handleOpenLocationPicker}>
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                paddingVertical: 14,
+                paddingHorizontal: 14,
+                borderRadius: 12,
+                backgroundColor: workLocation ? C.primaryMuted : C.surfaceSecondary,
+                borderWidth: 1,
+                borderColor: workLocation ? C.primary : 'transparent',
+                gap: 10,
+              }}
+            >
+              <MapPin
+                size={18}
+                color={workLocation ? C.primary : C.textSecondary}
+              />
+              <View style={{ flex: 1 }}>
+                <Text
+                  style={{
+                    fontSize: 14,
+                    fontWeight: '600',
+                    color: workLocation ? C.primary : C.text,
+                    fontFamily: 'SpaceGrotesk-SemiBold',
+                  }}
+                  numberOfLines={1}
+                >
+                  {workLocationLabel}
+                </Text>
+                {workLocation ? (
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      color: C.primary,
+                      marginTop: 1,
+                      fontFamily: 'SpaceGrotesk-Regular',
+                      opacity: 0.75,
+                    }}
+                  >
+                    {workLocationRadius}
+                  </Text>
+                ) : null}
+              </View>
+              <ChevronRight size={16} color={workLocation ? C.primary : C.textSecondary} />
+            </View>
+          </AnimatedPressable>
         </View>
 
         {/* Bluetooth Device Picker */}
