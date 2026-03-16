@@ -34,22 +34,21 @@ export function AnimatedPressable({
     }).start();
   }, [scale]);
 
-  // Pressable is the outer element so it owns the layout (style prop).
-  // Animated.View is the inner wrapper that applies the scale transform.
-  // It uses alignSelf:'stretch' so it fills the Pressable regardless of
-  // whether the parent uses flex or fixed dimensions.
+  // The Pressable is a transparent hit-area wrapper with no layout styles.
+  // All layout/visual styles (padding, borderRadius, backgroundColor, etc.)
+  // live on the Animated.View so the content has real dimensions and the
+  // press target is never zero-height.
   return (
     <Pressable
       onPressIn={animateIn}
       onPressOut={animateOut}
       onPress={onPress}
       disabled={disabled}
-      style={style}
       {...props}
     >
       <Animated.View
         style={[
-          { alignSelf: 'stretch', flex: 1 },
+          style,
           { transform: [{ scale }] },
           disabled && { opacity: 0.5 },
         ]}

@@ -1,5 +1,5 @@
-// Web stub — expo-sqlite is not supported on web.
-// All functions return safe empty values so the UI renders without crashing.
+// Web in-memory implementation — expo-sqlite is not available on web.
+// Data is stored in a module-level array and resets on page refresh.
 
 export interface WorkSession {
   id: string;
@@ -10,41 +10,97 @@ export interface WorkSession {
   created_at: string;
 }
 
+const sessions: WorkSession[] = [];
+
+function generateId(): string {
+  return Date.now().toString() + Math.random().toString(36).substring(2, 9);
+}
+
 export function initDB(): void {
-  console.log('[DB] Web stub — SQLite not available on web');
+  console.log('[DB] Web in-memory store ready');
 }
 
 export function clockIn(): string {
-  console.log('[DB] Web stub — clockIn called');
-  return '';
+  const id = generateId();
+  const now = new Date();
+  const startTime = now.toISOString();
+  const date = now.toLocaleDateString('en-CA'); // YYYY-MM-DD in local time
+  const session: WorkSession = {
+    id,
+    date,
+    start_time: startTime,
+    end_time: null,
+    notes: '',
+    created_at: startTime,
+  };
+  sessions.push(session);
+  console.log('[DB] Clock in recorded — id:', id, 'at:', startTime);
+  return id;
 }
 
-export function clockOut(_id: string): void {
-  console.log('[DB] Web stub — clockOut called');
+export function clockOut(id: string): void {
+  const now = new Date().toISOString();
+  const session = sessions.find((s) => s.id === id);
+  if (session) {
+    session.end_time = now;
+    console.log('[DB] Clock out recorded — id:', id, 'at:', now);
+  } else {
+    console.warn('[DB] clockOut: session not found — id:', id);
+  }
 }
 
 export function getActiveSession(): WorkSession | null {
-  return null;
+  const active = sessions.find((s) => s.end_time === null) ?? null;
+  console.log('[DB] Active session:', active ? active.id : 'none');
+  return active;
 }
 
 export function getTodaySessions(): WorkSession[] {
-  return [];
+  const today = new Date().toLocaleDateString('en-CA');
+  const results = sessions.filter((s) => s.date === today);
+  console.log('[DB] Today sessions count:', results.length);
+  return [...results].sort((a, b) => a.start_time.localeCompare(b.start_time));
+}
+
+export function getWeeklySessions(): WorkSession[] {
+  const now = Date.now();
+  const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
+  const results = sessions.filter(
+    (s) => new Date(s.start_time).getTime() >= sevenDaysAgo
+  );
+  console.log('[DB] Weekly sessions count:', results.length);
+  return [...results].sort((a, b) => b.start_time.localeCompare(a.start_time));
 }
 
 export function getAllSessions(): WorkSession[] {
-  return [];
+  console.log('[DB] All sessions count:', sessions.length);
+  return [...sessions].sort((a, b) => b.start_time.localeCompare(a.start_time));
 }
 
-export function getSessionById(_id: string): WorkSession | null {
-  return null;
+export function getSessionById(id: string): WorkSession | null {
+  const result = sessions.find((s) => s.id === id) ?? null;
+  console.log('[DB] Get session by id:', id, '— found:', !!result);
+  return result;
 }
 
-export function updateSessionNotes(_id: string, _notes: string): void {
-  console.log('[DB] Web stub — updateSessionNotes called');
+export function updateSessionNotes(id: string, notes: string): void {
+  const session = sessions.find((s) => s.id === id);
+  if (session) {
+    session.notes = notes;
+    console.log('[DB] Notes updated for session:', id);
+  } else {
+    console.warn('[DB] updateSessionNotes: session not found — id:', id);
+  }
 }
 
-export function deleteSession(_id: string): void {
-  console.log('[DB] Web stub — deleteSession called');
+export function deleteSession(id: string): void {
+  const index = sessions.findIndex((s) => s.id === id);
+  if (index !== -1) {
+    sessions.splice(index, 1);
+    console.log('[DB] Session deleted:', id);
+  } else {
+    console.warn('[DB] deleteSession: session not found — id:', id);
+  }
 }
 
 export function computeDurationMinutes(start: string, end: string | null): number {
