@@ -23,7 +23,7 @@
         "foregroundImage": "./assets/images/app-icon-mof.png",
         "backgroundColor": "#000000"
       },
-      "package": "com.placeholder.app"
+      "package": "Fi.eioleomaadomainia.eikatule.tyoaikakirjuri"
     },
     "web": {
       "favicon": "./assets/images/final_quest_240x240.png",
