@@ -41,7 +41,11 @@
       "typedRoutes": true
     },
     "extra": {
-      "router": {}
-    }
+      "router": {},
+      "eas": {
+        "projectId": "a9ab6dc5-9484-4eda-9d4c-bef6fa81ebeb"
+      }
+    },
+    "owner": "tc42"
   }
 }
